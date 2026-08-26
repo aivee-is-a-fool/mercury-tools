@@ -2,7 +2,7 @@
 # verify.sh — does the vendored copy still match its lock?
 #
 # Run from the root of the consuming repo:
-#   ./verify.sh
+#   ./verify.sh [vendor-dir]
 #
 # Exit 0 = the vendored tools are byte-identical to what install.sh recorded.
 # Exit 1 = drift: a local edit, a partial install, or a file that went missing.
@@ -22,8 +22,13 @@ LOCK="$DEST/mercury-tools.lock"
 RC=0
 while read -r HASH FILE; do
     [[ ${#HASH} -eq 64 ]] || continue
-    FILE="${FILE#\*}"   # sha256sum marks binary mode with a leading asterisk on
-                        # some platforms (Git Bash does, GNU coreutils does not)
+    # Two things the lock line can carry that are not part of the filename:
+    #   *  sha256sum's binary-mode marker (Git Bash writes it, coreutils does not)
+    #   \r a CRLF line ending, which git introduces on checkout under
+    #      core.autocrlf unless .gitattributes stops it. Reproduced: every file
+    #      then reads as "in the lock and missing from disk".
+    FILE="${FILE#\*}"
+    FILE="${FILE%$'\r'}"
     if [[ ! -e "$DEST/$FILE" ]]; then
         echo "DRIFT: $FILE is in the lock and missing from $DEST"
         RC=1
@@ -40,10 +45,10 @@ done < "$LOCK"
 # it is running, and nothing recorded where it came from.
 while read -r F; do
     REL="${F#"$DEST"/}"
-    grep -qE "[[:space:]][*]?${REL}\$" "$LOCK" || { echo "DRIFT: $REL is present but not in the lock"; RC=1; }
+    grep -qE "[[:space:]][*]?${REL}"$'\r'"?\$" "$LOCK" || { echo "DRIFT: $REL is present but not in the lock"; RC=1; }
 done < <(find "$DEST/tools" -type f 2>/dev/null)
 
 if [[ $RC -eq 0 ]]; then
-    echo "ok: $DEST matches its lock — $(sed -n 's/^commit //p' "$LOCK" | cut -c1-7), version $(sed -n 's/^version //p' "$LOCK")"
+    echo "ok: $DEST matches its lock — $(sed -n 's/^commit //p' "$LOCK" | tr -d '\r' | cut -c1-7), version $(sed -n 's/^version //p' "$LOCK" | tr -d '\r')"
 fi
 exit $RC
