@@ -21,8 +21,9 @@ LOCK="$DEST/mercury-tools.lock"
 
 RC=0
 while read -r HASH FILE; do
-    case "$HASH" in \#*|repo|requested|commit|version|installed) continue ;; esac
     [[ ${#HASH} -eq 64 ]] || continue
+    FILE="${FILE#\*}"   # sha256sum marks binary mode with a leading asterisk on
+                        # some platforms (Git Bash does, GNU coreutils does not)
     if [[ ! -e "$DEST/$FILE" ]]; then
         echo "DRIFT: $FILE is in the lock and missing from $DEST"
         RC=1
@@ -39,7 +40,7 @@ done < "$LOCK"
 # it is running, and nothing recorded where it came from.
 while read -r F; do
     REL="${F#"$DEST"/}"
-    grep -q "  $REL\$" "$LOCK" || { echo "DRIFT: $REL is present but not in the lock"; RC=1; }
+    grep -qE "[[:space:]][*]?${REL}\$" "$LOCK" || { echo "DRIFT: $REL is present but not in the lock"; RC=1; }
 done < <(find "$DEST/tools" -type f 2>/dev/null)
 
 if [[ $RC -eq 0 ]]; then
