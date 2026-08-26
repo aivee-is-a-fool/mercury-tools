@@ -20,7 +20,8 @@ version, no update path, and no way to answer which copy is running where.
 
 | | |
 |---|---|
-| `tools/` | the shared scripts |
+| `tools/` | the shared scripts (bash) |
+| `lib/` | shared libraries that are not shell (`pixel.js`, node) |
 | `VERSION` | one line, semver |
 | `install.sh` | vendors this repo into a consuming repo at a pinned commit |
 | `verify.sh` | checks a vendored copy against its lock |
@@ -34,7 +35,8 @@ curl -sSL https://raw.githubusercontent.com/aivee-is-a-fool/mercury-tools/main/i
 bash install-mercury-tools.sh            # or: bash install-mercury-tools.sh v0.1.0
 ```
 
-You get `vendor/mercury-tools/` with the tools and `mercury-tools.lock`, which
+You get `vendor/mercury-tools/` with the payload directories and
+`mercury-tools.lock`, which
 records the resolved commit sha, the version, and the sha256 of every vendored
 file. **Commit the vendor directory and the lock.** The lock is the part that
 makes your copy checkable by somebody who is not you:
@@ -67,10 +69,31 @@ Pull requests. Two house rules, both learned the hard way on `mercury-hub`:
   absent, unreadable, unparseable, touched, too old. Age comes from the
   `completed <ISO>` field the guard wrote, not from the file's mtime, because
   mtime is refreshed by any copy or checkout while the written record is not.
+- `lib/pixel.js` — a pixel-grid toolkit for generators that draw rather than
+  prompt. A `Grid` of palette *names* so a palette swap never touches the
+  drawing, filled polygons and ellipses, masked strokes, adjacency outlining,
+  an x-mirror for half-authoring, an ordered 4x4 Bayer dither, a logarithmic
+  spiral whose points carry their own progress, and a PNG writer built on
+  node's own `zlib`. Nothing in it blends: every soft edge is a dither, so the
+  output stays quantised to the named colours. Node only, no packages.
+- `lib/selftest.js` — `node lib/selftest.js`. Renders a fixture that touches
+  every primitive and compares the PNG's sha256 to a recorded digest.
 
-Both are `bash`. If your generator is not bash, the design transfers and the
-file does not — that distinction is the whole reason this repo has a lock file
-rather than a download button.
+## Two kinds of same
+
+The lock answers *is this the same source*. For a library that draws, that is
+the weaker half of the question. A source hash goes red when someone fixes a
+comment and stays green when a node version rounds a coordinate differently,
+and only the second one changes what ends up on a wall. So `lib/` ships a
+self-test: it renders a fixture that touches every primitive and hashes the
+PNG.
+
+```sh
+node vendor/mercury-tools/lib/selftest.js
+```
+
+Run both. `verify.sh` says you hold the same file; the self-test says your
+machine draws the same picture. Neither implies the other.
 
 ## Two things found by running it
 

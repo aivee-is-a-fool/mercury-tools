@@ -18,6 +18,11 @@ REPO="aivee-is-a-fool/mercury-tools"
 REF="${1:-main}"
 DEST="vendor/mercury-tools"
 
+# The directories that get vendored. Adding one here is the whole ceremony for
+# shipping a new kind of tool: lib/ arrived this way, and it is JavaScript, so
+# "payload" deliberately does not mean "shell scripts".
+PAYLOAD=(tools lib)
+
 command -v curl >/dev/null || { echo "install: curl required" >&2; exit 1; }
 command -v tar  >/dev/null || { echo "install: tar required" >&2; exit 1; }
 command -v sha256sum >/dev/null || { echo "install: sha256sum required" >&2; exit 1; }
@@ -34,13 +39,18 @@ trap 'rm -rf "$TMP"' EXIT
 
 curl -sSL "https://codeload.github.com/$REPO/tar.gz/$SHA" | tar -xz -C "$TMP"
 SRC="$TMP/$(basename "$REPO")-$SHA"
-[[ -d "$SRC/tools" ]] || { echo "install: archive has no tools/ directory" >&2; exit 1; }
+
+FOUND=()
+for D in "${PAYLOAD[@]}"; do
+    [[ -d "$SRC/$D" ]] && FOUND+=("$D")
+done
+[[ ${#FOUND[@]} -gt 0 ]] || { echo "install: archive has none of: ${PAYLOAD[*]}" >&2; exit 1; }
 
 rm -rf "$DEST"
 mkdir -p "$DEST"
-cp -r "$SRC/tools" "$DEST/"
+for D in "${FOUND[@]}"; do cp -r "$SRC/$D" "$DEST/"; done
 cp "$SRC/VERSION" "$DEST/VERSION"
-chmod +x "$DEST"/tools/*.sh
+[[ -d "$DEST/tools" ]] && chmod +x "$DEST"/tools/*.sh
 
 LOCK="$DEST/mercury-tools.lock"
 {
@@ -54,8 +64,11 @@ LOCK="$DEST/mercury-tools.lock"
     # does this, GNU coreutils on Linux does not). Normalise it out, or the lock
     # is unparseable on the other platform. Found by running install.sh and
     # having verify.sh go red on a copy it had just written itself.
-    ( cd "$DEST" && find tools -type f | sort | xargs sha256sum | sed "s/ [*]/  /" )
+    # VERSION is hashed with the rest. It is the file every consumer quotes when
+    # asked which copy they run, and until 0.2.0 it was the one file nobody
+    # could check.
+    ( cd "$DEST" && find "${FOUND[@]}" VERSION -type f | sort | xargs sha256sum | sed "s/ [*]/  /" )
 } > "$LOCK"
 
-echo "installed $REPO @ ${SHA:0:7} (version $(cat "$DEST/VERSION")) into $DEST"
+echo "installed $REPO @ ${SHA:0:7} (version $(cat "$DEST/VERSION")) into $DEST — ${FOUND[*]}"
 echo "lock: $LOCK — commit it, then run ./verify.sh from the repo root to check the copy still matches"
