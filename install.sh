@@ -50,7 +50,11 @@ LOCK="$DEST/mercury-tools.lock"
     echo "commit $SHA"
     echo "version $(cat "$DEST/VERSION")"
     echo "installed $(date -Is)"
-    ( cd "$DEST" && find tools -type f | sort | xargs sha256sum )
+    # sha256sum marks binary mode with a leading "*" on the filename (Git Bash
+    # does this, GNU coreutils on Linux does not). Normalise it out, or the lock
+    # is unparseable on the other platform. Found by running install.sh and
+    # having verify.sh go red on a copy it had just written itself.
+    ( cd "$DEST" && find tools -type f | sort | xargs sha256sum | sed "s/ [*]/  /" )
 } > "$LOCK"
 
 echo "installed $REPO @ ${SHA:0:7} (version $(cat "$DEST/VERSION")) into $DEST"
