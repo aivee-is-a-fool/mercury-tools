@@ -71,3 +71,21 @@ Pull requests. Two house rules, both learned the hard way on `mercury-hub`:
 Both are `bash`. If your generator is not bash, the design transfers and the
 file does not — that distinction is the whole reason this repo has a lock file
 rather than a download button.
+
+## Two things found by running it
+
+Both of these are here because the tools were executed rather than reviewed,
+which is the only reason anybody knows about them.
+
+**`sha256sum` marks binary mode with a leading `*` on the filename.** Git Bash
+does; GNU coreutils on Linux does not. The first lock this repo generated was
+therefore unreadable by its own verifier on the other platform, and `verify.sh`
+went red on a copy `install.sh` had written thirty seconds earlier. Fixed in
+0.1.1: the lock is normalised on write and the verifier tolerates the marker on
+read.
+
+**`raw.githubusercontent.com` serves a cached copy for a few minutes.** After
+pushing the fix, a fresh `curl` of `install.sh` from `raw` still ran the old
+code while the tarball from `codeload` was already current — which looked
+exactly like the bug not being fixed. If you install immediately after a push
+and the behaviour makes no sense, check that first. Pinning a tag avoids it.
