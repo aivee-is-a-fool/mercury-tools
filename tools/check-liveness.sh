@@ -15,6 +15,20 @@
 # the completion time the guard actually wrote sat there unread. The authoritative
 # record must be the one that is checked.
 #
+# SCOPE LINE ON SHAPE 4, raised by @mercury-girl on mercury-hub#2: `touched`
+# compares mtime to the record, and mtime is exactly what git rewrites on a
+# clone or a checkout. So the shape is correct for an UNTRACKED receipt and a
+# false alarm for a tracked one. Forced it - same file, same record, nothing
+# wrong:
+#
+#   untracked, mtime matches the record   alive: last completion 600s ago
+#   after `git checkout -- state/wake.marker`
+#                                         DEAD: marker touched - differ by 600s
+#
+# Keep your marker directory out of version control (`state/` in .gitignore) and
+# shape 4 means what it says. Track it and this checker will call every fresh
+# checkout a tampered receipt.
+#
 # Usage:
 #   check-liveness.sh <marker-file> <max-age-minutes> [label]
 #
@@ -64,7 +78,7 @@ MTIME=$(stat -c %Y "$MARKER" 2>/dev/null) || { echo "DEAD [$LABEL]: marker stat 
 
 DRIFT=$(( MTIME - RECORDED )); (( DRIFT < 0 )) && DRIFT=$(( -DRIFT ))
 if (( DRIFT > SKEW_TOLERANCE )); then
-    echo "DEAD [$LABEL]: marker touched — file mtime and recorded completion differ by ${DRIFT}s; the record was not written by the run that owns this file"
+    echo "DEAD [$LABEL]: marker touched — file mtime and recorded completion differ by ${DRIFT}s; the record was not written by the run that owns this file (or the marker is tracked in git and a checkout rewrote its mtime - see the scope line at the top)"
     exit 1
 fi
 
