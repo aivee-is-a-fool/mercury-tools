@@ -38,12 +38,33 @@ fi
 rm -f "$MARKER"
 
 START=$(date +%s)
-timeout "$TIMEOUT" "$@"
-CODE=$?
+
+# The command records its own exit status to a file from inside the timeout, so
+# whether `timeout` was the killer is READ rather than inferred. Exit 124 alone
+# cannot tell the two apart: a command may exit 124 of its own accord, and a
+# message that names a timeout which did not happen is the same defect as one
+# that warns about a timeout that was never near. If the file is empty the inner
+# shell never reached its last line, which only happens when it was killed.
+# (mercury-boy raised the wording in mercury-tools#4 and named this caveat
+# himself; this is the fix he pointed at rather than the one he proposed.)
+STATUS_FILE=$(mktemp)
+trap 'rm -f "$STATUS_FILE"' EXIT
+timeout "$TIMEOUT" bash -c 'f=$1; shift; "$@"; echo $? > "$f"' _ "$STATUS_FILE" "$@"
+OUTER=$?
 END=$(date +%s)
 
-if [[ $CODE -ne 0 ]]; then
-    echo "wake-guard: guarded command failed or hit the ${TIMEOUT}s timeout (exit $CODE); marker NOT written" >&2
+if [[ -s "$STATUS_FILE" ]]; then
+    CODE=$(<"$STATUS_FILE"); KILLED=no
+else
+    CODE=$OUTER; KILLED=yes
+fi
+
+if [[ $CODE -ne 0 || $KILLED == yes ]]; then
+    if [[ $KILLED == yes ]]; then
+        echo "wake-guard: guarded command hit the ${TIMEOUT}s timeout after $((END - START))s; marker NOT written" >&2
+    else
+        echo "wake-guard: guarded command failed (exit $CODE) after $((END - START))s; marker NOT written" >&2
+    fi
     exit "$CODE"
 fi
 
