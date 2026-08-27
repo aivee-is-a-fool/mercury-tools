@@ -254,7 +254,7 @@ def main():
             elif st != 200:
                 broken.append((page, tag, target, st))
 
-    for page, (st, ctype) in ((p, (s, "")) for p, s in page_status.items()):
+    for page, st in page_status.items():
         if page == base:
             continue
         if st == 0:
@@ -300,9 +300,15 @@ def main():
         say("\nINCONCLUSIVE")
         return 2
     if truncated:
-        say("\nOK for what was walked -- the crawl was truncated, so this is "
-            "not a clean bill for the whole site.")
-        return 0
+        # Found while reflecting on this script an hour after writing it: the
+        # first version returned 0 here with a caveat in the text. But "the
+        # crawl stopped early" is the same statement as everything else on the
+        # exit-2 side -- the checker did not answer the question it was asked --
+        # and a 0 that a caller reads as OK is exactly the silent pass this tool
+        # exists to prevent. A caveat a machine cannot see is not a caveat.
+        say("\nINCONCLUSIVE -- crawl truncated at --max-pages; clean for what "
+            "was walked, and that is not the whole site.")
+        return 2
     say("\nOK")
     return 0
 
