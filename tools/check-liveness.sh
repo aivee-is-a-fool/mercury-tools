@@ -1,33 +1,50 @@
 #!/usr/bin/env bash
 # check-liveness.sh — the outside view of run-with-marker.sh. Answers, as a
 # separate process: did the guarded thing actually COMPLETE recently?
-# Red on all five failure shapes:
+# Red on four failure shapes:
 #   1. marker absent        -> the guarded run never finished (maybe never started)
 #   2. marker unreadable    -> someone or something corrupted the record
 #   3. marker unparseable   -> the writer's format and this parser disagree
-#   4. marker touched       -> mtime and the recorded completion time diverge
-#   5. marker too old       -> it used to run and stopped
+#   4. marker too old       -> it used to run and stopped
 #
-# Shapes 3 and 4 were added 2026-08-26 after @mercury-girl asked whether a DEAD
+# A fifth condition, mtime diverging from the record, is REPORTED but is not red;
+# see the note below.
+#
+# Shape 3, and the mtime comparison that used to be shape 4, were added
+# 2026-08-26 after @mercury-girl asked whether a DEAD
 # was a true negative or a writer/parser format mismatch. It could not have been
 # a mismatch: this script never read the marker's CONTENT, only its mtime. That
 # is the defect. mtime is metadata any copy, checkout or `touch` refreshes, while
 # the completion time the guard actually wrote sat there unread. The authoritative
 # record must be the one that is checked.
 #
-# SCOPE LINE ON SHAPE 4, raised by @mercury-girl on mercury-hub#2: `touched`
-# compares mtime to the record, and mtime is exactly what git rewrites on a
-# clone or a checkout. So the shape is correct for an UNTRACKED receipt and a
-# false alarm for a tracked one. Forced it - same file, same record, nothing
-# wrong:
+# SHAPE 4 ("touched") IS DEMOTED TO A NOTE, and the reason is a measurement, not
+# an opinion. @mercury-girl raised on mercury-hub#2 that `touched` compares mtime
+# to the record while git rewrites mtime on every checkout, and proposed telling
+# the two causes apart with `git ls-files --error-unmatch`. That would add a git
+# dependency to a checker whose whole job is to run on a machine where something
+# already failed. It is also unnecessary, because the distinction does not change
+# any verdict. Forced all four combinations against this file and against a copy
+# with shape 4 disabled:
 #
-#   untracked, mtime matches the record   alive: last completion 600s ago
-#   after `git checkout -- state/wake.marker`
-#                                         DEAD: marker touched - differ by 600s
+#   record 1h old (inside limit), mtime refreshed by a checkout
+#       with shape 4     DEAD: marker touched - differ by 3601s
+#       without shape 4  alive: last completion 3601s ago      <- the truth
 #
-# Keep your marker directory out of version control (`state/` in .gitignore) and
-# shape 4 means what it says. Track it and this checker will call every fresh
-# checkout a tampered receipt.
+#   record 2 days old, touched to look fresh (the tamper shape 4 exists for)
+#       with shape 4     DEAD: marker touched
+#       without shape 4  DEAD: last completion 172800s ago (limit 86400s)
+#
+# Shape 4 has NO true positive that shape 5 does not already catch, and it has at
+# least one false positive. Faking mtime cannot fool this checker, because age is
+# read from the record; that was the 2026-08-26 fix. So the alarm was guarding a
+# door that fix had already locked.
+#
+# The drift is still worth SAYING - something did write to the file after the run
+# did - so it is now appended to the verdict instead of replacing it. An
+# instrument that fires on a condition which cannot change the answer is noise,
+# and this repo's own rule is that a check which cannot fail meaningfully gets
+# sharpened or deleted.
 #
 # Usage:
 #   check-liveness.sh <marker-file> <max-age-minutes> [label]
@@ -77,9 +94,9 @@ NOW=$(date +%s)
 MTIME=$(stat -c %Y "$MARKER" 2>/dev/null) || { echo "DEAD [$LABEL]: marker stat failed"; exit 1; }
 
 DRIFT=$(( MTIME - RECORDED )); (( DRIFT < 0 )) && DRIFT=$(( -DRIFT ))
+DRIFT_NOTE=""
 if (( DRIFT > SKEW_TOLERANCE )); then
-    echo "DEAD [$LABEL]: marker touched — file mtime and recorded completion differ by ${DRIFT}s; the record was not written by the run that owns this file (or the marker is tracked in git and a checkout rewrote its mtime - see the scope line at the top)"
-    exit 1
+    DRIFT_NOTE=" [mtime differs from the record by ${DRIFT}s - a checkout, copy or touch rewrote it; the verdict is read from the record, so this does not change it]"
 fi
 
 # Age comes from the record the guard wrote, not from the file's metadata.
@@ -87,9 +104,9 @@ AGE=$(( NOW - RECORDED ))
 LIMIT=$(( MAXAGE_MIN * 60 ))
 
 if (( AGE > LIMIT )); then
-    echo "DEAD [$LABEL]: last completion ${AGE}s ago (limit ${LIMIT}s) — $BODY"
+    echo "DEAD [$LABEL]: last completion ${AGE}s ago (limit ${LIMIT}s) — $BODY$DRIFT_NOTE"
     exit 1
 fi
 
-echo "alive [$LABEL]: last completion ${AGE}s ago — $BODY"
+echo "alive [$LABEL]: last completion ${AGE}s ago — $BODY$DRIFT_NOTE"
 exit 0
