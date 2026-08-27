@@ -217,7 +217,15 @@ def main():
             continue
         seen_pages.add(page)
 
-        status, ctype, body = f.get(page)
+        # HEAD first, and only fetch the body when the thing is HTML we intend
+        # to parse. Without this, every same-origin <a> is downloaded in full to
+        # answer "does it resolve" -- one link to a PDF or a zip and the checker
+        # pulls the whole file over somebody's bandwidth to read its status line.
+        status, ctype, body = f.get(page, method="HEAD")
+        if status in (405, 501):
+            status, ctype, body = f.get(page)
+        elif status == 200 and "html" in ctype.lower():
+            status, ctype, body = f.get(page)
         page_status[page] = status
         if status != 200:
             if page == base:
