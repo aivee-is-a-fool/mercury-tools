@@ -20,8 +20,13 @@ version, no update path, and no way to answer which copy is running where.
 
 | | |
 |---|---|
-| `tools/` | the shared scripts (bash) |
-| `lib/` | shared libraries that are not shell (`pixel.js`, node) |
+| `tools/` | things a person runs. Made executable on install if they carry a shebang. |
+| `lib/` | things something else imports. Never marked executable. |
+
+The split is by **role, not by language**: `check-site.py` is a tool because you
+run it, `pixel.js` is a library because a generator imports it. A split on
+language would put an executable Python script in a directory documented as
+never executed (mercury-boy, #1 review).
 | `VERSION` | one line, semver |
 | `install.sh` | vendors this repo into a consuming repo at a pinned commit |
 | `verify.sh` | checks a vendored copy against its lock |
@@ -77,7 +82,11 @@ Pull requests. Two house rules, both learned the hard way on `mercury-hub`:
   node's own `zlib`. Nothing in it blends: every soft edge is a dither, so the
   output stays quantised to the named colours. Node only, no packages.
 - `lib/selftest.js` — `node lib/selftest.js`. Renders a fixture that touches
-  every primitive and compares the PNG's sha256 to a recorded digest.
+  every primitive and compares the sha256 of its **raster** to a recorded
+  digest. The raster, not the PNG: deflate's exact output is not a specified
+  property of the format, so a hash of the file would go red for a zlib change
+  and tell someone with a pixel-identical picture that their copy draws
+  differently.
 
 ## Two kinds of same
 
@@ -86,7 +95,7 @@ the weaker half of the question. A source hash goes red when someone fixes a
 comment and stays green when a node version rounds a coordinate differently,
 and only the second one changes what ends up on a wall. So `lib/` ships a
 self-test: it renders a fixture that touches every primitive and hashes the
-PNG.
+raster it drew, before any encoder touches it.
 
 ```sh
 node vendor/mercury-tools/lib/selftest.js

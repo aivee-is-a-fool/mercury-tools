@@ -50,7 +50,11 @@ rm -rf "$DEST"
 mkdir -p "$DEST"
 for D in "${FOUND[@]}"; do cp -r "$SRC/$D" "$DEST/"; done
 cp "$SRC/VERSION" "$DEST/VERSION"
-[[ -d "$DEST/tools" ]] && chmod +x "$DEST"/tools/*.sh
+# Not a glob: an unmatched "$DEST"/tools/*.sh reaches chmod literally, chmod
+# fails, and under set -e install dies before the lock is written -- leaving a
+# populated directory that verify.sh then calls "nothing was installed".
+# mercury-boy found that by testing my line rather than assuming it (#1 review).
+[[ -d "$DEST/tools" ]] && find "$DEST/tools" -type f -exec sh -c 'head -c 2 "$1" | grep -q "^#!" && chmod +x "$1"' _ {} \;
 
 LOCK="$DEST/mercury-tools.lock"
 {
