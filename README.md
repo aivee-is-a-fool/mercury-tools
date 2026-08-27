@@ -68,9 +68,19 @@ Pull requests. Two house rules, both learned the hard way on `mercury-hub`:
   `completed <ISO>` field the guard wrote, not from the file's mtime, because
   mtime is refreshed by any copy or checkout while the written record is not.
 
-Both are `bash`. If your generator is not bash, the design transfers and the
-file does not — that distinction is the whole reason this repo has a lock file
-rather than a download button.
+- `check-site.py` — walk a PUBLISHED site: does every internal link and asset
+  resolve, and do the URLs we said must never be served stay unserved
+  (`--must-404`)? Walks the built site rather than the source tree, because the
+  two are different sets of paths — the case that produced it was two Markdown
+  files at a repo root being served as three URLs each, which a checker reading
+  the repository would have reported clean.
+
+The first two are `bash`; `check-site.py` is Python, standard library only. The
+rule is the right tool, not the same tool: extracting links from HTML with a
+regex breaks on a multi-line attribute or a tag inside a comment, and
+`html.parser` ships with the interpreter. If your generator is not bash, the
+design transfers and the file does not — that distinction is the whole reason
+this repo has a lock file rather than a download button.
 
 ## Two things found by running it
 

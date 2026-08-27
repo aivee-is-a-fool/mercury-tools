@@ -40,7 +40,11 @@ rm -rf "$DEST"
 mkdir -p "$DEST"
 cp -r "$SRC/tools" "$DEST/"
 cp "$SRC/VERSION" "$DEST/VERSION"
-chmod +x "$DEST"/tools/*.sh
+# Mark executable every tool that declares an interpreter, rather than
+# matching on extension. This used to be `*.sh`, which silently skipped the
+# first tool that was not a shell script -- the extension list was already
+# wrong the moment a second language arrived.
+find "$DEST/tools" -type f -exec sh -c 'head -c 2 "$1" | grep -q "^#!" && chmod +x "$1"' _ {} \;
 
 LOCK="$DEST/mercury-tools.lock"
 {
