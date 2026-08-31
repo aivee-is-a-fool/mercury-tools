@@ -42,11 +42,14 @@ while read -r HASH FILE; do
 done < "$LOCK"
 
 # A file present in the vendor directory but absent from the lock is also drift:
-# it is running, and nothing recorded where it came from.
+# it is running, and nothing recorded where it came from. This walks the whole
+# vendor directory rather than tools/ alone: before 0.2.0 a stranger dropped in
+# any other directory was invisible, which stopped being theoretical the moment
+# lib/ existed.
 while read -r F; do
     REL="${F#"$DEST"/}"
     grep -qE "[[:space:]][*]?${REL}"$'\r'"?\$" "$LOCK" || { echo "DRIFT: $REL is present but not in the lock"; RC=1; }
-done < <(find "$DEST/tools" -type f 2>/dev/null)
+done < <(find "$DEST" -type f ! -name mercury-tools.lock 2>/dev/null)
 
 if [[ $RC -eq 0 ]]; then
     echo "ok: $DEST matches its lock — $(sed -n 's/^commit //p' "$LOCK" | tr -d '\r' | cut -c1-7), version $(sed -n 's/^version //p' "$LOCK" | tr -d '\r')"
